@@ -1,0 +1,1017 @@
+/* ============================================================ 食堂评分墙 —— 前端 SPA（原生 JS，零依赖） */
+"use strict";
+
+const $ = (s, p) => (p || document).querySelector(s);
+const $$ = (s, p) => Array.from((p || document).querySelectorAll(s));
+
+/* ------------------------------------------------------------ 工具 */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+const CN = ["一", "二", "三"];
+function loc(w) { return `${CN[w.canteen - 1]}食堂 ${w.floor === 1 ? "一" : "二"}楼 ${String(w.win_no).padStart(2, "0")}号`; }
+
+function fmtTime(t) {
+  const d = new Date(t.replace(" ", "T"));
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return Math.floor(diff / 60) + " 分钟前";
+  if (diff < 86400) return Math.floor(diff / 3600) + " 小时前";
+  if (diff < 86400 * 30) return Math.floor(diff / 86400) + " 天前";
+  return d.toLocaleDateString("zh-CN");
+}
+function fmtDate(t) {
+  const d = new Date(t.replace(" ", "T"));
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/* ------------------------------------------------------------ 图标（Lucide 内联） */
+const ICONS = {
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+  message: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  reply: '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+  timer: '<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>',
+  grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  store: '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  edit: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  eyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  thumbsUp: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  key: '<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+  restore: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  trending: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  crown: '<path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7Z"/><path d="M5 20h14"/>',
+  award: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
+};
+function icon(name, cls) { return `<svg class="${cls || ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`; }
+
+function stars(score, cls) {
+  let h = `<span class="stars ${cls || ""}">`;
+  const v = Math.round(score || 0);
+  for (let i = 1; i <= 5; i++) h += icon("star", i <= v ? "on" : "");
+  return h + "</span>";
+}
+
+/* ------------------------------------------------------------ API */
+async function api(path, method, body) {
+  const opts = { method: method || "GET", headers: {} };
+  if (body !== undefined && body !== null) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  try {
+    const r = await fetch(path, opts);
+    return await r.json();
+  } catch (e) {
+    return { ok: false, msg: "网络异常，请重试" };
+  }
+}
+async function apiUpload(path, formData) {
+  try {
+    const r = await fetch(path, { method: "POST", body: formData });
+    return await r.json();
+  } catch (e) { return { ok: false, msg: "上传失败，请重试" }; }
+}
+
+function compressImage(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, (maxDim || 800) / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(img.width * scale));
+      cv.height = Math.max(1, Math.round(img.height * scale));
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      cv.toBlob(b => {
+        URL.revokeObjectURL(url);
+        b ? resolve(new File([b], "photo.jpg", { type: "image/jpeg" })) : reject(new Error("压缩失败"));
+      }, "image/jpeg", quality || 0.82);
+    };
+    img.onerror = () => reject(new Error("图片读取失败"));
+    img.src = url;
+  });
+}
+
+/* ------------------------------------------------------------ toast / modal / confirm */
+function toast(msg, type) {
+  const t = document.createElement("div");
+  t.className = "toast " + (type || "ok");
+  const ic = type === "err" ? "alert" : type === "info" ? "info" : "check";
+  t.innerHTML = icon(ic) + "<span>" + esc(msg) + "</span>";
+  $("#toastRoot").appendChild(t);
+  setTimeout(() => { t.style.transition = "all .3s"; t.style.opacity = "0"; t.style.transform = "translateY(-6px)"; setTimeout(() => t.remove(), 320); }, 2600);
+}
+
+function modal(html, wide) {
+  $("#modalRoot").innerHTML =
+    `<div class="modal-backdrop" data-act="backdrop"><div class="modal ${wide ? "wide" : ""}">${html}</div></div>`;
+  const firstInput = $(".modal input, .modal select, .modal textarea");
+  if (firstInput) setTimeout(() => firstInput.focus(), 60);
+}
+function closeModal() { $("#modalRoot").innerHTML = ""; }
+
+function confirmBox(title, text, okText, danger) {
+  return new Promise(res => {
+    App._cf = v => res(v);
+    modal(`<h3>${icon(danger ? "alert" : "info")} ${esc(title)}</h3>
+      <div class="m-sub">${text}</div>
+      <div class="m-actions">
+        <button class="btn btn-ghost" data-act="confirm-cancel">取消</button>
+        <button class="btn ${danger ? "btn-danger" : "btn-primary"}" data-act="confirm-ok">${esc(okText || "确定")}</button>
+      </div>`);
+  });
+}
+
+/* ------------------------------------------------------------ 全局状态 */
+const S = {
+  boot: null,          // bootstrap 数据
+  route: "leaderboard",
+  winSel: { canteen: 1, floor: 1 },
+  curWindowId: null,
+  curWindowData: null,
+  lbMonth: null,
+  adminTab: "dashboard",
+  merchantTab: "overview",
+  postsFilter: "1",
+  reportsTab: 0,
+  hoverScore: 0,
+  countdownTimer: null,
+  postPhotoFile: null,
+};
+
+/* ------------------------------------------------------------ 顶栏 */
+function renderTopbar() {
+  const b = S.boot || {};
+  const role = b.role || "anon";
+  const route = S.route;
+  let nav = "";
+  if (role === "admin") {
+    nav = `<a href="#/admin" class="${route === "admin" ? "active" : ""}">管理看板</a>
+           <a href="#/leaderboard">学生视角</a>`;
+  } else if (role === "merchant") {
+    nav = `<a href="#/merchant" class="${route === "merchant" ? "active" : ""}">商家中心</a>
+           <a href="#/leaderboard">学生视角</a>`;
+  } else {
+    nav = `<a href="#/leaderboard" class="${route === "leaderboard" ? "active" : ""}">${icon("trophy")} 榜单</a>
+           <a href="#/canteens" class="${route === "canteens" ? "active" : ""}">${icon("grid")} 食堂</a>
+           <a href="#/my" class="${route === "my" ? "active" : ""}">${icon("user")} 我的</a>`;
+  }
+  $("#mainNav").innerHTML = nav;
+  $("#mainNav").querySelectorAll("a").forEach(a => {
+    if (a.querySelector("svg")) a.classList.add("withIcon");
+  });
+
+  let idz = "";
+  if (role === "anon") {
+    const left = b.quota_left, total = b.quota_total;
+    idz = `<span class="pill gray">${icon("timer")} 今日打分 ${total - left}/${total}</span>
+      <span class="pill" title="你的匿名代号，任何人都无法查到你的真实信息">${icon("shield")} ${esc(b.nickname)}</span>
+      <button class="btn btn-ghost btn-sm" data-act="anon-reset" title="换一个新的匿名身份">${icon("refresh")} 换身份</button>
+      <a class="btn btn-ghost btn-sm" href="#/merchant">${icon("store")} 商家</a>
+      <a class="btn btn-ghost btn-sm" href="#/admin">${icon("shield")} 管理员</a>`;
+  } else if (role === "admin") {
+    idz = `<span class="pill">${icon("shield")} 管理员 ${esc(b.admin_name || "")}</span>
+      <button class="btn btn-ghost btn-sm" data-act="admin-changepw">${icon("key")} 改密码</button>
+      <button class="btn btn-ghost btn-sm" data-act="logout">${icon("logout")} 退出</button>`;
+  } else {
+    idz = `<span class="pill">${icon("store")} ${esc(b.merchant_window || "商家")}</span>
+      <button class="btn btn-ghost btn-sm" data-act="logout">${icon("logout")} 退出</button>`;
+  }
+  $("#identity").innerHTML = idz;
+}
+
+async function refreshBoot() {
+  const r = await api("/api/bootstrap");
+  if (r.ok) {
+    S.boot = r.data;
+    renderTopbar();
+  }
+  return r;
+}
+
+/* ------------------------------------------------------------ 榜单页 */
+async function renderLeaderboard() {
+  const month = S.lbMonth || (S.boot ? S.boot.this_month : null);
+  const r = await api("/api/leaderboard" + (month ? "?month=" + month : ""));
+  if (!r.ok) { $("#view").innerHTML = `<div class="empty">${icon("alert")} ${esc(r.msg)}</div>`; return; }
+  const d = r.data;
+  S.lbMonth = d.month;
+  const rows = d.rows || [];
+  const champion = rows[0] || null;
+  const runners = rows.slice(1, 3);
+  const rest = rows.slice(3);
+  const monthOpts = (d.months || []).map(m => `<option value="${m}" ${m === d.month ? "selected" : ""}>${m} 月榜</option>`).join("");
+  const photoUrl = p => "/uploads/" + p;
+
+  /* C 位冠军 */
+  const champHtml = champion ? `
+    <div class="champ-card ${champion.photo ? "has-photo" : ""}"
+         ${champion.photo ? `style="--cover:url('${photoUrl(champion.photo)}')"` : ""}
+         data-act="go-window" data-id="${champion.window_id}">
+      <div class="champ-inner">
+        <div class="champ-crown">${icon("crown")} 本月 C 位</div>
+        <div class="champ-name">${esc(champion.name)}</div>
+        <div class="champ-loc">${loc(champion)} · ${esc(champion.merchant_name)}</div>
+        <div class="champ-bottom">
+          <div class="champ-score"><b>${champion.avg_score.toFixed(1)}</b><span>/ 5.0</span></div>
+          <div class="champ-side">
+            <div class="champ-stars">${stars(champion.avg_score)}</div>
+            <div class="champ-meta">${icon("users")} ${champion.cnt} 人评分</div>
+          </div>
+        </div>
+      </div>
+    </div>` : `<div class="empty">${icon("trophy")} 本月还没有评分数据，快去给你吃过的窗口打分吧</div>`;
+
+  /* 亚军 / 季军 */
+  const runnerHtml = runners.map((w, i) => `
+    <div class="runner-card r${i + 2}" data-act="go-window" data-id="${w.window_id}">
+      <div class="runner-top">
+        <span class="runner-rank">${i + 2}</span>
+        <span class="runner-score">${w.avg_score.toFixed(1)}</span>
+      </div>
+      <div class="runner-name">${esc(w.name)}</div>
+      <div class="runner-loc">${loc(w)}</div>
+      <div class="runner-meta">${stars(w.avg_score)} <span>${w.cnt} 人</span></div>
+    </div>`).join("");
+
+  /* 上月冠军海报区 */
+  const lastRows = d.last_rows || [];
+  const lastLabel = d.last_month ? d.last_month.replace("-", " 年 ") + " 月" : "";
+  const posterHtml = lastRows.length ? `
+    <div class="poster-zone">
+      <div class="poster-head">
+        <div>
+          <div class="poster-eyebrow">${icon("award")} 往期封榜</div>
+          <h2 class="poster-title">${lastLabel} · 冠军海报</h2>
+        </div>
+        <div class="poster-note">该月已封榜，成绩不再变动</div>
+      </div>
+      <div class="poster-body">
+        <div class="poster-hero ${lastRows[0].photo ? "has-photo" : ""}"
+             ${lastRows[0].photo ? `style="--cover:url('${photoUrl(lastRows[0].photo)}')"` : ""}
+             data-act="go-window" data-id="${lastRows[0].window_id}">
+          <div class="poster-ribbon">NO.1</div>
+          <div class="poster-content">
+            <div class="poster-month">${lastLabel}</div>
+            <div class="poster-window">${esc(lastRows[0].name)}</div>
+            <div class="poster-loc">${loc(lastRows[0])} · ${esc(lastRows[0].merchant_name)}</div>
+            <div class="poster-score-big">${lastRows[0].avg_score.toFixed(1)}<small>分</small></div>
+            <div class="poster-foot">${stars(lastRows[0].avg_score)} · ${lastRows[0].cnt} 人评分</div>
+          </div>
+        </div>
+        <div class="poster-list">
+          ${lastRows.slice(1, 5).map(w => `
+            <div class="poster-item" data-act="go-window" data-id="${w.window_id}">
+              <span class="pi-rank">${w.rank}</span>
+              <span class="pi-name">${esc(w.name)}</span>
+              <span class="pi-score">${w.avg_score.toFixed(1)}</span>
+            </div>`).join("")}
+        </div>
+      </div>
+    </div>` : "";
+
+  $("#view").innerHTML = `
+    <div class="page-head">
+      <div><h1>${icon("trophy")} 月度评分榜</h1>
+        <div class="sub">按自然月自动更新 · 窗口平均分排序（评分人数为 tie-breaker）</div></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span class="countdown" id="lbCountdown">${icon("timer")} 计算中…</span>
+        <select class="month-sel" id="lbMonthSel">${monthOpts}</select>
+      </div>
+    </div>
+
+    <div class="champ-wrap">
+      ${champHtml}
+      ${runners.length ? `<div class="runners">${runnerHtml}</div>` : ""}
+    </div>
+
+    ${posterHtml}
+
+    <div class="card" style="padding:8px 10px;margin-top:14px">
+      ${rest.map(w => `
+        <div class="rank-row ${w.status !== 1 ? "closed" : ""}" ${w.status === 1 ? `data-act="go-window" data-id="${w.window_id}"` : ""}>
+          <div class="rank-no ${w.rank <= 3 ? "r" + w.rank : ""}">${w.rank}</div>
+          <div class="rank-main"><div class="rn">${esc(w.name)} ${w.status !== 1 ? '<span class="tag off">已停用</span>' : ""}</div>
+            <div class="rl">${loc(w)} · ${esc(w.merchant_name)}</div></div>
+          ${stars(w.avg_score)}
+          <div class="rank-score">${w.avg_score.toFixed(1)}</div>
+          <div class="rank-cnt">${w.cnt} 人评</div>
+          ${icon("chevronRight")}
+        </div>`).join("") || (champion ? '<div class="empty">暂时只有前 3 名有数据</div>' : "")}
+    </div>`;
+  $("#lbMonthSel").addEventListener("change", e => { S.lbMonth = e.target.value; renderLeaderboard(); });
+  startCountdown(d.next_update);
+}
+
+function startCountdown(target) {
+  if (S.countdownTimer) clearInterval(S.countdownTimer);
+  const el = $("#lbCountdown");
+  if (!el) return;
+  const tgt = new Date(target.replace(" ", "T"));
+  const tick = () => {
+    const s = Math.max(0, Math.floor((tgt - new Date()) / 1000));
+    const dd = Math.floor(s / 86400), hh = Math.floor(s % 86400 / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60;
+    el.innerHTML = icon("timer") + ` 距 <b>${tgt.getMonth() + 1}月榜</b> 更新还有 <b>${dd}天${hh}时${mm}分${ss}秒</b>`;
+  };
+  tick();
+  S.countdownTimer = setInterval(tick, 1000);
+}
+
+/* ------------------------------------------------------------ 食堂浏览页 */
+async function renderCanteens() {
+  const r = await api("/api/canteens");
+  if (!r.ok) { $("#view").innerHTML = `<div class="empty">${icon("alert")} ${esc(r.msg)}</div>`; return; }
+  const d = r.data;
+  const sel = S.winSel;
+  const todayRated = new Set(d.today_rated || []);
+  const canteenTabs = [1, 2, 3].map(c => {
+    const wins = d.windows.filter(w => w.canteen === c);
+    const on = wins.filter(w => w.status === 1).length;
+    return `<div class="ctab ${sel.canteen === c ? "active" : ""}" data-act="sel-canteen" data-v="${c}">
+      <div class="ci">${CN[c - 1]}</div>
+      <div><div class="cn">${CN[c - 1]}食堂</div><div class="cs">营业中 ${on}/20 窗口</div></div></div>`;
+  }).join("");
+  const floorTabs = [1, 2].map(f =>
+    `<button class="${sel.floor === f ? "active" : ""}" data-act="sel-floor" data-v="${f}">${f === 1 ? "一楼" : "二楼"}</button>`).join("");
+  const wins = d.windows.filter(w => w.canteen === sel.canteen && w.floor === sel.floor);
+  const cards = wins.map(w => {
+    const rated = todayRated.has(w.id);
+    return `<div class="win-card ${w.status !== 1 ? "closed" : ""}" ${w.status === 1 ? `data-act="go-window" data-id="${w.id}"` : ""}>
+      ${w.rank && w.rank <= 10 ? `<div class="rank-badge ${w.rank === 1 ? "top1" : ""}">月榜 #${w.rank}</div>` : ""}
+      <div class="wc-top"><span class="wno">${String(w.win_no).padStart(2, "0")}</span><span class="wname2">${esc(w.name)}</span></div>
+      <div class="wmer">商家：${esc(w.merchant_name)} ${w.status !== 1 ? '<span class="tag off">停业</span>' : ""}</div>
+      <div class="wscore">${stars(w.avg_score)} <b>${w.avg_score != null ? w.avg_score.toFixed(1) : "—"}</b>
+        <span>（${w.month_cnt} 人评）</span></div>
+      <div class="wmeta"><span>${icon("utensils")} ${w.dish_cnt} 道菜</span><span>${icon("timer")} 剩 ${d.quota_left} 次打分</span></div>
+      ${rated ? '<span class="rated-mark">✓ 今日已打分</span>' : ""}
+    </div>`;
+  }).join("");
+
+  $("#view").innerHTML = `
+    <div class="page-head"><div><h1>${icon("grid")} 食堂窗口</h1>
+      <div class="sub">3 个食堂 · 每个食堂 2 层 · 每层 10 个窗口 · 今日剩余 ${d.quota_left} 次打分机会</div></div></div>
+    <div class="canteen-tabs">${canteenTabs}</div>
+    <div class="floor-tabs">${floorTabs}</div>
+    <div class="win-grid">${cards}</div>`;
+}
+
+/* ------------------------------------------------------------ 窗口详情页 */
+async function renderWindow(id) {
+  const [wr, pr] = await Promise.all([api("/api/windows/" + id), api("/api/windows/" + id + "/posts")]);
+  if (!wr.ok) { $("#view").innerHTML = `<div class="empty">${icon("alert")} ${esc(wr.msg)}</div>`; return; }
+  const d = wr.data, w = d.window;
+  S.curWindowId = id; S.curWindowData = d; S.hoverScore = 0;
+  const closed = w.status !== 1;
+  const canRate = !closed && d.my_today_score == null && d.quota_left > 0;
+
+  const dishes = d.dishes.map(dh => `
+    <div class="dish-card">
+      <div class="dish-photo">${dh.photo ? `<img src="/uploads/${esc(dh.photo)}" alt="${esc(dh.name)}">`
+        : `<div class="ph">${icon("image")}</div>`}</div>
+      <div class="dish-body">
+        <div class="dish-name"><span>${esc(dh.name)}</span><span class="dish-price">¥${dh.price.toFixed ? dh.price.toFixed(1) : dh.price}</span></div>
+        <div class="dish-intro">${esc(dh.intro) || '<span class="faint">商家暂未填写简介</span>'}</div>
+        <div class="dish-updated">更新于 ${fmtDate(dh.updated_at)}</div>
+      </div>
+    </div>`).join("");
+
+  const dishOpts = ['<option value="">不关联菜品</option>']
+    .concat(d.dishes.map(x => `<option value="${x.id}">${esc(x.name)}</option>`)).join("");
+
+  let rateBox = "";
+  if (closed) {
+    rateBox = `<span class="pill gray">${icon("info")} 窗口已停用，暂不能打分</span>`;
+  } else if (d.my_today_score != null) {
+    rateBox = `<span class="pill ok">${icon("check")} 今天已打 ${d.my_today_score} 星，明天再来</span>`;
+  } else if (d.quota_left <= 0) {
+    rateBox = `<span class="pill warn">${icon("timer")} 今日 3 次打分机会已用完</span>`;
+  } else {
+    rateBox = `<div class="rate-box" id="rateBox">${[1, 2, 3, 4, 5].map(i =>
+      `<button data-act="rate-star" data-v="${i}" title="${i} 星">${icon("star", "s" + i)}</button>`).join("")}</div>
+      <div class="rate-tip">点击星星打分（1~5 星）· 今天还能给 <b>${d.quota_left}</b> 个窗口打分</div>`;
+  }
+
+  const posts = pr.ok ? pr.data.posts : [];
+  const postHtml = posts.map(p => postHtml_(p)).join("");
+
+  $("#view").innerHTML = `
+    <div class="crumb"><span data-act="go-canteens" class="link">${icon("grid")} 食堂</span>
+      ${icon("chevronRight")} <span>${loc(w)}</span></div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="win-head">
+        <div><h2>${icon("utensils")} ${esc(w.name)} ${closed ? '<span class="tag off">已停用</span>' : ""}
+          ${w.rank ? `<span class="rank-badge" style="position:static;display:inline-flex;vertical-align:middle;margin-top:4px">本月 #${w.rank}</span>` : ""}</h2>
+          <div class="wm">${loc(w)} · 商家：${esc(w.merchant_name)}</div></div>
+        <div class="win-stats">
+          <div class="ws-item"><div class="v">${w.avg_score != null ? w.avg_score.toFixed(1) : "—"}</div><div class="l">本月均分 ${stars(w.avg_score)}</div></div>
+          <div class="ws-item"><div class="v">${w.month_cnt}</div><div class="l">本月评分人数</div></div>
+          <div class="ws-item"><div class="v">${w.total_cnt}</div><div class="l">累计评分</div></div>
+          <div class="ws-item"><div class="v">${w.post_cnt}</div><div class="l">讨论帖</div></div>
+        </div>
+      </div>
+      <div class="rate-panel">${rateBox}</div>
+    </div>
+    <div class="sec-title">${icon("utensils")} 今日菜品 <span class="cnt">（价格以商家当日发布为准）</span></div>
+    <div class="dish-grid">${dishes || `<div class="empty" style="grid-column:1/-1">${icon("utensils")} 商家还未上架菜品</div>`}</div>
+    <div class="sec-title">${icon("message")} 匿名讨论区 <span class="cnt">（发帖无需登录、不显示任何真实信息）</span></div>
+    ${closed ? "" : `
+    <div class="card post-box">
+      <textarea id="postContent" maxlength="500" placeholder="说说这家窗口的味道、分量、排队情况…（匿名发布）"></textarea>
+      <div id="postPhotoPreview"></div>
+      <div class="post-tools">
+        <select id="postDish">${dishOpts}</select>
+        <label class="photo-pick" id="postPhotoPick">${icon("camera")} <span>加张照片</span>
+          <input type="file" id="postPhotoInput" accept="image/*"></label>
+        <span class="char-count" id="charCount">0/500</span>
+        <button class="btn btn-primary" data-act="submit-post">${icon("send")} 匿名发布</button>
+      </div>
+    </div>`}
+    <div id="postsWrap">${postHtml || `<div class="empty">${icon("message")} 还没有讨论，来抢个沙发？</div>`}</div>`;
+
+  const ta = $("#postContent");
+  if (ta) ta.addEventListener("input", () => { $("#charCount").textContent = ta.value.length + "/500"; });
+  const pin = $("#postPhotoInput");
+  if (pin) pin.addEventListener("change", async () => {
+    const f = pin.files && pin.files[0];
+    if (!f) return;
+    try {
+      const small = await compressImage(f, 1280, 0.82);
+      S.postPhotoFile = small;
+      $("#postPhotoPreview").innerHTML =
+        `<div class="photo-preview"><img src="${URL.createObjectURL(small)}" alt="">
+          <button class="photo-del" data-act="clear-post-photo" title="移除照片">${icon("x")}</button></div>`;
+      const pick = $("#postPhotoPick");
+      if (pick) pick.querySelector("span").textContent = "换一张";
+    } catch (e) { toast("图片处理失败，换一张试试", "err"); }
+  });
+  bindRateHover();
+}
+
+function postHtml_(p, isReply) {
+  const nick = esc(p.nickname);
+  const initial = p.nickname ? p.nickname.slice(0, 1) : "匿";
+  return `
+  <div class="post" data-pid="${p.id}">
+    <div class="post-head"><span class="avatar">${esc(initial)}</span>
+      <div><span class="post-nick">${nick}</span> <span class="post-time">${fmtTime(p.created_at)}</span></div></div>
+    ${p.dish ? `<div class="dish-tag">${icon("utensils")} ${esc(p.dish.name)}（¥${p.dish.price}）</div>` : ""}
+    <div class="post-content">${esc(p.content)}</div>
+    ${p.photo ? `<img class="post-photo" src="/uploads/${esc(p.photo)}" alt="留言照片" loading="lazy"
+        data-act="view-photo" data-src="/uploads/${esc(p.photo)}">` : ""}
+    <div class="post-actions">
+      <button class="pa ${p.liked ? "liked" : ""}" data-act="like" data-id="${p.id}">${icon("thumbsUp")} <span class="n">${p.likes}</span></button>
+      ${isReply ? "" : `<button class="pa" data-act="reply-toggle" data-id="${p.id}">${icon("reply")} 回复 <span class="n">${p.reply_count || 0}</span></button>`}
+      <button class="pa" data-act="report" data-id="${p.id}" title="举报">${icon("flag")} 举报</button>
+    </div>
+    ${isReply ? "" : `
+    <div class="reply-area" id="ra-${p.id}" style="display:none">
+      <div class="replies">${(p.replies || []).map(r => postHtml_(r, true)).join("")}</div>
+      <div class="reply-form">
+        <input id="ri-${p.id}" maxlength="500" placeholder="匿名回复…">
+        <button class="btn btn-primary btn-sm" data-act="reply-send" data-id="${p.id}">${icon("send")}</button>
+      </div>
+    </div>`}
+  </div>`;
+}
+
+function bindRateHover() {
+  const box = $("#rateBox");
+  if (!box) return;
+  const btns = $$("button", box);
+  const paint = v => btns.forEach(b => { const s = +b.dataset.v; $("svg", b).classList.toggle("on", s <= v); });
+  btns.forEach(b => {
+    b.addEventListener("mouseover", () => paint(+b.dataset.v));
+    b.addEventListener("mouseout", () => paint(S.hoverScore));
+  });
+}
+
+/* ------------------------------------------------------------ 我的页 */
+async function renderMy() {
+  const r = await api("/api/my");
+  if (!r.ok) { $("#view").innerHTML = `<div class="empty">${icon("alert")} ${esc(r.msg)}</div>`; return; }
+  const d = r.data;
+  const initial = d.nickname ? d.nickname.slice(0, 1) : "匿";
+  const ratings = d.ratings.map(x => `
+    <div class="rank-row" data-act="go-window" data-id="${x.window_id}">
+      <div class="rank-no">${x.score}★</div>
+      <div class="rank-main"><div class="rn">${esc(x.window_name)}</div><div class="rl">${loc(x)}</div></div>
+      <div class="rank-cnt">${x.date}</div>${icon("chevronRight")}</div>`).join("");
+  const posts = d.posts.map(x => `
+    <div class="rank-row" data-act="go-window" data-id="${x.window_id}">
+      <div class="rank-no">${icon(x.parent_id ? "reply" : "message")}</div>
+      <div class="rank-main"><div class="rn" style="font-weight:400;font-size:13px">${esc(x.content)}</div>
+        <div class="rl">${esc(x.window_name)} · ${fmtTime(x.created_at)}</div></div></div>`).join("");
+  $("#view").innerHTML = `
+    <div class="page-head"><div><h1>${icon("user")} 我的</h1></div>
+      <button class="btn btn-ghost" data-act="anon-reset">${icon("refresh")} 换一个匿名身份</button></div>
+    <div class="profile-hero">
+      <span class="avatar">${esc(initial)}</span>
+      <div><h2>${esc(d.nickname)}</h2>
+        <div class="anon-note">${icon("shield")} 你的身份是系统随机生成的代号，不绑定学号、姓名、手机号，任何其他同学、商家、管理员都无法查到你的真实信息。</div>
+        <div style="font-size:11.5px;opacity:.75;margin-top:6px">身份创建于 ${esc(d.created_at)}</div></div>
+    </div>
+    <div class="stat-grid" style="margin-top:14px">
+      <div class="stat-card"><div class="sv">${d.quota_left}</div><div class="sl">${icon("timer")} 今日剩余打分次数</div></div>
+      <div class="stat-card"><div class="sv">${d.ratings.length}</div><div class="sl">${icon("star")} 我的评分记录</div></div>
+      <div class="stat-card"><div class="sv">${d.posts.length}</div><div class="sl">${icon("message")} 我的发帖回复</div></div>
+      <div class="stat-card"><div class="sv">${d.likes_given}</div><div class="sl">${icon("thumbsUp")} 我点过的赞</div></div>
+    </div>
+    <div class="sec-title">${icon("star")} 我的评分历史</div>
+    <div class="card" style="padding:8px 10px">${ratings || '<div class="empty">还没有打过分，去食堂页逛逛吧</div>'}</div>
+    <div class="sec-title">${icon("message")} 我的发帖记录</div>
+    <div class="card" style="padding:8px 10px">${posts || '<div class="empty">还没有发过帖</div>'}</div>`;
+}
+
+/* ------------------------------------------------------------ 登录页 */
+function renderLogin(kind) {
+  const isAdmin = kind === "admin";
+  $("#view").innerHTML = `
+    <div class="login-wrap"><div class="card">
+      <h2>${icon(isAdmin ? "shield" : "store")} ${isAdmin ? "管理员登录" : "商家登录"}</h2>
+      <div class="sub">${isAdmin ? "窗口管理 · 帖子审核 · 商家账号维护" : "管理本窗口的菜品、菜价与照片"}</div>
+      <form id="loginForm">
+        <div class="field"><label>账号</label><input id="lgUser" autocomplete="username" placeholder="${isAdmin ? "admin" : "如 c1-1-01（一食堂一楼01号）"}"></div>
+        <div class="field"><label>密码</label><input id="lgPass" type="password" autocomplete="current-password" placeholder="请输入密码"></div>
+        <button class="btn btn-primary" style="width:100%" type="submit">${icon("lock")} 登录</button>
+      </form>
+      <div class="login-tip">${isAdmin
+        ? "演示环境默认账号：admin / admin@2026（上线后请立即在「改密码」中修改）"
+        : "商家账号由管理员预建后线下发放，格式：c食堂-楼层-窗口号，初始密码 shop123456，登录后可请管理员重置"}</div>
+      <div style="text-align:center;margin-top:14px"><a class="link" href="#/leaderboard">← 返回学生视角（无需登录）</a></div>
+    </div></div>`;
+  $("#loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const r = await api("/api/auth/login", "POST", { role: isAdmin ? "admin" : "merchant",
+      username: $("#lgUser").value.trim(), password: $("#lgPass").value });
+    if (!r.ok) { toast(r.msg, "err"); return; }
+    toast("登录成功");
+    await refreshBoot();
+    location.hash = isAdmin ? "#/admin" : "#/merchant";
+    route();
+  });
+}
+
+/* ------------------------------------------------------------ 管理员端 */
+async function renderAdmin() {
+  if (!S.boot || S.boot.role !== "admin") { renderLogin("admin"); return; }
+  const tabs = [["dashboard", "chart", "数据看板"], ["windows", "store", "窗口管理"], ["posts", "message", "帖子管理"],
+    ["reports", "flag", "举报处理"], ["logs", "clock", "操作日志"]];
+  $("#view").innerHTML = `
+    <div class="page-head"><div><h1>${icon("shield")} 管理中心</h1>
+      <div class="sub">窗口与商家账号维护 · 违规帖子处理 · 数据总览</div></div></div>
+    <div class="tabs">${tabs.map(t => `<button class="${S.adminTab === t[0] ? "active" : ""}" data-act="admin-tab" data-v="${t[0]}">${icon(t[1])} ${t[2]}</button>`).join("")}</div>
+    <div id="adminBody"></div>`;
+  const body = $("#adminBody");
+  if (S.adminTab === "dashboard") {
+    const r = await api("/api/admin/dashboard");
+    if (!r.ok) { body.innerHTML = `<div class="empty">${esc(r.msg)}</div>`; return; }
+    const d = r.data;
+    body.innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-card"><div class="sv">${d.active_cnt}/${d.window_cnt}</div><div class="sl">${icon("store")} 营业窗口 / 总窗口</div></div>
+        <div class="stat-card"><div class="sv">${d.dish_cnt}</div><div class="sl">${icon("utensils")} 在售菜品数</div></div>
+        <div class="stat-card"><div class="sv">${d.month_ratings}</div><div class="sl">${icon("star")} 本月评分数</div></div>
+        <div class="stat-card"><div class="sv">${d.today_ratings}</div><div class="sl">${icon("timer")} 今日评分数</div></div>
+        <div class="stat-card"><div class="sv">${d.month_posts}</div><div class="sl">${icon("message")} 本月发帖数</div></div>
+        <div class="stat-card"><div class="sv ${d.pending_reports ? "warn" : ""}">${d.pending_reports}</div><div class="sl">${icon("flag")} 待处理举报 ${d.pending_reports ? "（需关注）" : ""}</div></div>
+        <div class="stat-card"><div class="sv">${d.anon_cnt}</div><div class="sl">${icon("users")} 匿名同学数（无真实信息）</div></div>
+      </div>
+      <div class="sec-title">${icon("flame")} ${d.month} 月榜 Top 5</div>
+      <div class="card" style="padding:8px 10px">${d.top5.map((w, i) => `
+        <div class="rank-row" data-act="go-window" data-id="${w.id}">
+          <div class="rank-no ${i < 3 ? "r" + (i + 1) : ""}">${i + 1}</div>
+          <div class="rank-main"><div class="rn">${esc(w.name)}</div><div class="rl">${loc(w)}</div></div>
+          ${stars(w.avg_score)}<div class="rank-score">${w.avg_score.toFixed(1)}</div>
+          <div class="rank-cnt">${w.cnt} 人评</div></div>`).join("")}</div>`;
+  } else if (S.adminTab === "windows") {
+    const wr = await api("/api/admin/windows");
+    if (!wr.ok) { body.innerHTML = `<div class="empty">${esc(wr.msg)}</div>`; return; }
+    body.innerHTML = `<div class="card tbl-wrap"><table class="tbl">
+      <tr><th>位置</th><th>窗口名</th><th>商家</th><th>商家账号</th><th>在售菜品</th><th>本月评分</th><th>状态</th><th>操作</th></tr>
+      ${wr.data.windows.map(w => `<tr class="${w.status === 1 ? "" : "off"}">
+        <td>${loc(w)}</td><td><b>${esc(w.name)}</b></td><td>${esc(w.merchant_name)}</td>
+        <td><code>${esc(w.merchant_user)}</code></td><td>${w.dish_cnt}</td><td>${w.month_cnt}</td>
+        <td><span class="tag ${w.status === 1 ? "on" : "off"}">${w.status === 1 ? "营业" : "停用"}</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" data-act="admin-edit-window" data-id="${w.id}">${icon("edit")} 编辑</button>
+          <button class="btn btn-ghost btn-sm" data-act="admin-reset-pw" data-id="${w.id}">${icon("key")} 重置商家密码</button>
+        </td></tr>`).join("")}</table></div>`;
+  } else if (S.adminTab === "posts") {
+    const pr = await api("/api/admin/posts" + (S.postsFilter !== "all" ? "?status=" + S.postsFilter : ""));
+    if (!pr.ok) { body.innerHTML = `<div class="empty">${esc(pr.msg)}</div>`; return; }
+    body.innerHTML = `
+      <div class="tabs">
+        ${[["1", "正常帖子"], ["0", "已删除"], ["all", "全部"]].map(f =>
+          `<button class="${S.postsFilter === f[0] ? "active" : ""}" data-act="admin-post-filter" data-v="${f[0]}">${f[1]}</button>`).join("")}
+      </div>
+      <div class="card tbl-wrap"><table class="tbl">
+      <tr><th>时间</th><th>窗口</th><th>匿名昵称</th><th>内容</th><th>赞</th><th>待处理举报</th><th>状态</th><th>操作</th></tr>
+      ${pr.data.posts.map(p => `<tr>
+        <td style="white-space:nowrap">${fmtDate(p.created_at)}</td>
+        <td style="white-space:nowrap">${esc(p.window_name)}</td>
+        <td>${esc(p.nickname)}</td>
+        <td style="max-width:300px">${esc(p.content)}</td>
+        <td>${p.likes}</td>
+        <td>${p.pending_reports ? `<span class="tag warn">${p.pending_reports} 条</span>` : "—"}</td>
+        <td><span class="tag ${p.status === 1 ? "on" : "del"}">${p.parent_id ? "回复·" : ""}${p.status === 1 ? "正常" : "已删"}</span></td>
+        <td style="white-space:nowrap">${p.status === 1
+          ? `<button class="btn btn-danger btn-sm" data-act="admin-del-post" data-id="${p.id}">${icon("trash")} 删除</button>`
+          : `<button class="btn btn-ok btn-sm" data-act="admin-restore-post" data-id="${p.id}">${icon("restore")} 恢复</button>`}</td>
+      </tr>`).join("") || '<tr><td colspan="8" class="empty">暂无帖子</td></tr>'}</table></div>`;
+  } else if (S.adminTab === "reports") {
+    const rr = await api("/api/admin/reports?status=" + S.reportsTab);
+    if (!rr.ok) { body.innerHTML = `<div class="empty">${esc(rr.msg)}</div>`; return; }
+    body.innerHTML = `
+      <div class="tabs">${[[0, "待处理"], [1, "已删帖"], [2, "已驳回"]].map(t =>
+        `<button class="${S.reportsTab === t[0] ? "active" : ""}" data-act="admin-report-tab" data-v="${t[0]}">${t[1]}</button>`).join("")}</div>
+      ${rr.data.reports.map(rp => `
+        <div class="report-card">
+          <div class="rc-head"><span>${icon("flag")} 举报理由：<b>${esc(rp.reason)}</b></span>
+            <span>${fmtTime(rp.report_time)} · ${esc(rp.window_name)} · 举报人：${esc(rp.nickname)}</span></div>
+          <div class="rc-content">${esc(rp.content)} ${rp.post_status !== 1 ? '<span class="tag del">帖子已删除</span>' : ""}</div>
+          ${S.reportsTab === 0 ? `<div style="display:flex;gap:8px">
+            <button class="btn btn-danger" data-act="report-resolve" data-rid="${rp.report_id}" data-v="delete">${icon("trash")} 属实，删除帖子</button>
+            <button class="btn btn-ghost" data-act="report-resolve" data-rid="${rp.report_id}" data-v="dismiss">不属实，驳回举报</button>
+          </div>` : `<span class="tag ${rp.status === 1 ? "del" : "off"}">${rp.status === 1 ? "已删除帖子" : "已驳回"}</span>`}
+        </div>`).join("") || `<div class="empty">${icon("check")} 这里空空如也，一切正常</div>`}`;
+  } else if (S.adminTab === "logs") {
+    const lr = await api("/api/admin/logs");
+    if (!lr.ok) { body.innerHTML = `<div class="empty">${esc(lr.msg)}</div>`; return; }
+    body.innerHTML = `<div class="card">${lr.data.logs.map(l => `
+      <div class="log-item"><span class="lt">${l.created_at}</span>
+        <span><b>${esc(l.action)}</b> · <span class="muted">${esc(l.detail)}</span></span></div>`).join("")
+      || '<div class="empty">暂无操作日志</div>'}</div>`;
+  }
+}
+
+function adminEditWindowModal(w) {
+  modal(`<h3>${icon("edit")} 编辑窗口信息</h3>
+    <div class="m-sub">${loc(w)} · 商家账号 <code>${esc(w.merchant_user)}</code></div>
+    <div class="field"><label>窗口名称</label><input id="mWinName" value="${esc(w.name)}" maxlength="30"></div>
+    <div class="field"><label>商家名称</label><input id="mMerName" value="${esc(w.merchant_name)}" maxlength="30"></div>
+    <div class="field"><label>营业状态</label>
+      <select id="mWinStatus"><option value="1" ${w.status === 1 ? "selected" : ""}>营业中</option>
+        <option value="0" ${w.status !== 1 ? "selected" : ""}>停用</option></select></div>
+    <div class="m-actions"><button class="btn btn-ghost" data-act="modal-close">取消</button>
+      <button class="btn btn-primary" data-act="admin-save-window" data-id="${w.id}">保存</button></div>`);
+}
+
+function adminChangePwModal() {
+  modal(`<h3>${icon("key")} 修改管理员密码</h3>
+    <div class="field"><label>原密码</label><input id="pwOld" type="password"></div>
+    <div class="field"><label>新密码（至少 8 位）</label><input id="pwNew" type="password"></div>
+    <div class="field"><label>确认新密码</label><input id="pwNew2" type="password"></div>
+    <div class="m-actions"><button class="btn btn-ghost" data-act="modal-close">取消</button>
+      <button class="btn btn-primary" data-act="admin-save-pw">保存</button></div>`);
+}
+
+/* ------------------------------------------------------------ 商家端 */
+async function renderMerchant() {
+  if (!S.boot || S.boot.role !== "merchant") { renderLogin("merchant"); return; }
+  const r = await api("/api/merchant/overview");
+  if (!r.ok) {
+    $("#view").innerHTML = `<div class="empty">${icon("alert")} ${esc(r.msg)} <div style="margin-top:10px"><button class="btn btn-ghost btn-sm" data-act="logout">退出登录</button></div></div>`;
+    return;
+  }
+  const d = r.data, w = d.window;
+  const trendMax = Math.max(...d.trend.map(t => t.avg_score || 0), 5);
+  $("#view").innerHTML = `
+    <div class="page-head"><div><h1>${icon("store")} 商家中心 · ${esc(w.name)}</h1>
+      <div class="sub">${loc(w)} · 账号 ${esc(w.merchant_user)}</div></div>
+      <button class="btn btn-primary" data-act="dish-add">${icon("plus")} 上架新菜品</button></div>
+    <div class="grid" style="grid-template-columns:2fr 1fr;margin-bottom:16px">
+      <div class="card"><div class="sec-title" style="margin:2px 0 10px">${icon("trending")} 近 7 天评分趋势</div>
+        ${d.trend.length ? `<div class="trend-bars">${d.trend.map(t => `
+          <div class="tb"><div class="bar" style="height:${Math.max(4, (t.avg_score || 0) / trendMax * 100)}%">
+            <span>${t.avg_score ? t.avg_score.toFixed(1) : ""}</span></div>
+            <div class="bd">${t.date.slice(5)}<br>${t.cnt} 评</div></div>`).join("")}</div>`
+          : `<div class="empty">近 7 天暂无评分</div>`}</div>
+      <div class="card">
+        <div style="text-align:center;padding:8px 0">
+          <div class="score-big" style="font-size:34px">${w.avg_score != null ? w.avg_score.toFixed(1) : "—"}</div>
+          <div style="margin:6px 0">${stars(w.avg_score, "lg")}</div>
+          <div class="muted" style="font-size:12px">本月 ${w.month_cnt} 人评分<br>累计 ${w.total_cnt} 人评分</div>
+        </div></div>
+    </div>
+    <div class="sec-title">${icon("utensils")} 菜品管理 <span class="cnt">（当日菜价、味道简介、照片随时可更新）</span></div>
+    <div class="card tbl-wrap"><table class="tbl">
+      <tr><th>照片</th><th>菜品</th><th>当日菜价</th><th>味道简介</th><th>状态</th><th>更新时间</th><th>操作</th></tr>
+      ${d.dishes.map(x => `<tr>
+        <td>${x.photo ? `<img src="/uploads/${esc(x.photo)}" style="width:52px;height:40px;object-fit:cover;border-radius:6px">` : `<span class="faint">无</span>`}</td>
+        <td><b>${esc(x.name)}</b></td><td style="color:#d97706;font-weight:700">¥${x.price}</td>
+        <td style="max-width:220px" class="muted">${esc(x.intro) || "—"}</td>
+        <td><span class="tag ${x.status === 1 ? "on" : "off"}">${x.status === 1 ? "在售" : "下架"}</span></td>
+        <td style="white-space:nowrap">${fmtDate(x.updated_at)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" data-act="dish-edit" data-id="${x.id}">${icon("edit")} 编辑</button>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer">${icon("image")} 传照片
+            <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none"
+              data-photo-dish="${x.id}"></label>
+          <button class="btn ${x.status === 1 ? "btn-danger" : "btn-ok"} btn-sm" data-act="dish-status" data-id="${x.id}" data-v="${x.status === 1 ? 0 : 1}">
+            ${x.status === 1 ? "下架" : "上架"}</button>
+        </td></tr>`).join("")}</table></div>
+    <div class="sec-title">${icon("message")} 最新学生反馈 <span class="cnt">（只读，无法删除；违规内容由管理员处理）</span></div>
+    <div class="card">${d.feedback.map(f => `
+      <div class="log-item"><span class="lt">${fmtTime(f.created_at)}</span>
+        <span><b>${esc(f.nickname)}</b>：<span class="muted">${esc(f.content)}</span></span></div>`).join("")
+    || '<div class="empty">暂无反馈</div>'}</div>`;
+
+  $$("input[data-photo-dish]").forEach(inp => inp.addEventListener("change", async e => {
+    const did = +e.target.dataset.photoDish;
+    const file = e.target.files[0];
+    if (!file) return;
+    toast("正在上传照片…", "info");
+    try {
+      const cf = await compressImage(file, 800, 0.82);
+      const fd = new FormData();
+      fd.append("photo", cf);
+      const res = await apiUpload(`/api/merchant/dishes/${did}/photo`, fd);
+      if (res.ok) { toast("照片已更新"); renderMerchant(); }
+      else toast(res.msg, "err");
+    } catch (err2) { toast(err2.message || "上传失败", "err"); }
+  }));
+}
+
+function dishFormModal(dish) {
+  const isNew = !dish;
+  dish = dish || { name: "", price: "", intro: "" };
+  modal(`<h3>${icon(isNew ? "plus" : "edit")} ${isNew ? "上架新菜品" : "编辑菜品"}</h3>
+    <div class="field"><label>菜品名称</label><input id="dName" value="${esc(dish.name)}" maxlength="40" placeholder="如：招牌黄焖鸡米饭"></div>
+    <div class="field"><label>当日菜价（元）</label><input id="dPrice" value="${dish.price}" placeholder="如 16.5"></div>
+    <div class="field"><label>味道简介</label><textarea id="dIntro" maxlength="200" style="min-height:70px;width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 12px" placeholder="如：鸡腿肉土豆青椒现焖，汤汁拌饭一绝">${esc(dish.intro)}</textarea></div>
+    ${isNew ? "" : `<div class="field"><label>状态</label><select id="dStatus">
+      <option value="1" ${dish.status === 1 ? "selected" : ""}>在售</option>
+      <option value="0" ${dish.status !== 1 ? "selected" : ""}>下架</option></select></div>`}
+    <div class="m-actions"><button class="btn btn-ghost" data-act="modal-close">取消</button>
+      <button class="btn btn-primary" data-act="dish-save" data-id="${isNew ? "" : dish.id}">${isNew ? "上架" : "保存"}</button></div>`);
+}
+
+/* ------------------------------------------------------------ 路由 */
+function route() {
+  const h = location.hash || "#/leaderboard";
+  const parts = h.replace(/^#\//, "").split("/");
+  if (S.countdownTimer) { clearInterval(S.countdownTimer); S.countdownTimer = null; }
+  const map = { leaderboard: "leaderboard", canteens: "canteens", my: "my", admin: "admin", merchant: "merchant" };
+  if (parts[0] === "window" && parts[1]) {
+    S.route = "window";
+    renderTopbar();
+    renderWindow(parts[1]);
+  } else {
+    S.route = map[parts[0]] || "leaderboard";
+    renderTopbar();
+    if (S.route === "leaderboard") renderLeaderboard();
+    else if (S.route === "canteens") renderCanteens();
+    else if (S.route === "my") renderMy();
+    else if (S.route === "admin") renderAdmin();
+    else if (S.route === "merchant") renderMerchant();
+  }
+  window.scrollTo(0, 0);
+}
+
+/* ------------------------------------------------------------ 事件分发 */
+document.addEventListener("click", async e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const act = el.dataset.act, id = el.dataset.id, v = el.dataset.v;
+  switch (act) {
+    case "backdrop": if (e.target === el) closeModal(); break;
+    case "modal-close": closeModal(); break;
+    case "confirm-cancel": closeModal(); App._cf(false); break;
+    case "confirm-ok": closeModal(); App._cf(true); break;
+    case "go-window": location.hash = "#/window/" + id; break;
+    case "go-canteens": location.hash = "#/canteens"; break;
+    case "sel-canteen": S.winSel.canteen = +v; renderCanteens(); break;
+    case "sel-floor": S.winSel.floor = +v; renderCanteens(); break;
+    case "anon-reset": {
+      const yes = await confirmBox("更换匿名身份？", "你将以一个<b>全新的随机代号</b>继续使用。旧代号下的评分和发帖记录仍会保留（无法与新身份关联），但「我的」页面将看不到它们。", "换新身份", false);
+      if (!yes) return;
+      const r = await api("/api/anon/reset", "POST");
+      if (r.ok) { toast("新身份：" + r.data.nickname); await refreshBoot(); if (S.route === "my") renderMy(); }
+      else toast(r.msg, "err");
+      break;
+    }
+    case "rate-star": {
+      S.hoverScore = +v;
+      const r = await api("/api/rate", "POST", { window_id: S.curWindowId, score: +v });
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      toast(`已打 ${v} 星，感谢匿名反馈`);
+      await refreshBoot();
+      renderWindow(S.curWindowId);
+      break;
+    }
+    case "submit-post": {
+      const ta = $("#postContent");
+      const content = ta.value.trim();
+      if (!content && !S.postPhotoFile) { toast("写点内容或加张照片再发布吧", "err"); return; }
+      const dishSel = $("#postDish");
+      const r = await api("/api/posts", "POST", {
+        window_id: S.curWindowId,
+        content: content || "分享一张实拍照片",
+        dish_id: dishSel.value ? +dishSel.value : null,
+      });
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      if (S.postPhotoFile) {
+        const fd = new FormData();
+        fd.append("photo", S.postPhotoFile);
+        const up = await apiUpload("/api/posts/" + r.data.post.id + "/photo", fd);
+        if (!up.ok) toast("照片没传上去：" + (up.msg || "请重试"), "err");
+      }
+      S.postPhotoFile = null;
+      toast("已匿名发布");
+      renderWindow(S.curWindowId);
+      break;
+    }
+    case "clear-post-photo": {
+      S.postPhotoFile = null;
+      const box = $("#postPhotoPreview");
+      if (box) box.innerHTML = "";
+      const pick = $("#postPhotoPick");
+      if (pick) pick.querySelector("span").textContent = "加张照片";
+      break;
+    }
+    case "close-modal": { closeModal(); break; }
+    case "view-photo": {
+      modal(`<div class="lightbox"><img src="${el.dataset.src}" alt=""><button class="lb-close" data-act="close-modal">${icon("x")}</button></div>`);
+      break;
+    }
+    case "like": {
+      const r = await api(`/api/posts/${id}/like`, "POST");
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      el.classList.toggle("liked", r.data.liked);
+      $(".n", el).textContent = r.data.likes;
+      break;
+    }
+    case "reply-toggle": {
+      const area = $("#ra-" + id);
+      area.style.display = area.style.display === "none" ? "block" : "none";
+      if (area.style.display === "block") { const inp = $("#ri-" + id); if (inp) inp.focus(); }
+      break;
+    }
+    case "reply-send": {
+      const inp = $("#ri-" + id);
+      const content = inp.value.trim();
+      if (!content) { toast("回复内容不能为空", "err"); return; }
+      const r = await api(`/api/posts/${id}/reply`, "POST", { content });
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      toast("回复成功");
+      renderWindow(S.curWindowId);
+      break;
+    }
+    case "report": {
+      modal(`<h3>${icon("flag")} 举报这条帖子</h3>
+        <div class="m-sub">举报完全匿名，管理员不会知道举报人身份。多次恶意举报可能影响社区氛围，请谨慎使用。</div>
+        <div class="field"><label>举报理由</label><select id="rpReason">
+          <option>垃圾广告</option><option>人身攻击/引战</option><option>不实信息</option><option>色情低俗</option><option>其他</option></select></div>
+        <div class="field"><label>补充说明（可选）</label><textarea id="rpNote" maxlength="80" style="min-height:56px;width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 12px" placeholder="简单说明情况"></textarea></div>
+        <div class="m-actions"><button class="btn btn-ghost" data-act="modal-close">取消</button>
+          <button class="btn btn-danger" data-act="report-submit" data-id="${id}">提交举报</button></div>`);
+      break;
+    }
+    case "report-submit": {
+      const reason = $("#rpReason").value + ($("#rpNote").value.trim() ? "：" + $("#rpNote").value.trim() : "");
+      const r = await api(`/api/posts/${id}/report`, "POST", { reason });
+      closeModal();
+      if (r.ok) toast("举报已提交，管理员会尽快处理");
+      else toast(r.msg, "err");
+      break;
+    }
+    case "logout": {
+      const yes = await confirmBox("退出登录？", "退出后将以<b>匿名学生身份</b>继续浏览。", "退出", false);
+      if (!yes) return;
+      await api("/api/auth/logout", "POST");
+      await refreshBoot();
+      location.hash = "#/leaderboard";
+      route();
+      break;
+    }
+    /* ---- 管理员 ---- */
+    case "admin-tab": S.adminTab = v; renderAdmin(); break;
+    case "admin-post-filter": S.postsFilter = v; renderAdmin(); break;
+    case "admin-report-tab": S.reportsTab = +v; renderAdmin(); break;
+    case "admin-edit-window": {
+      const r = await api("/api/admin/windows");
+      const w = r.ok && r.data.windows.find(x => x.id === +id);
+      if (w) adminEditWindowModal(w);
+      break;
+    }
+    case "admin-save-window": {
+      const r = await api(`/api/admin/windows/${id}`, "PUT", {
+        name: $("#mWinName").value.trim(), merchant_name: $("#mMerName").value.trim(),
+        status: $("#mWinStatus").value === "1" ? 1 : 0 });
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      closeModal(); toast("窗口信息已更新"); renderAdmin();
+      break;
+    }
+    case "admin-reset-pw": {
+      const yes = await confirmBox("重置该窗口商家的登录密码？", "重置后原密码立即失效，请将新密码线下告知商家。", "重置", false);
+      if (!yes) return;
+      const r = await api(`/api/admin/windows/${id}/reset-merchant-password`, "POST");
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      modal(`<h3>${icon("key")} 商家密码已重置</h3>
+        <div class="m-sub">请复制后线下发放给商家（关闭后无法再次查看）：</div>
+        <div class="pw-box">商家账号：<code>${esc(r.data.username)}</code><br>新密码：<code>${esc(r.data.password)}</code>
+          <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" data-act="copy-pw" data-pw="${esc(r.data.username)} ${esc(r.data.password)}">${icon("check")} 复制</button></div></div>
+        <div class="m-actions"><button class="btn btn-primary" data-act="modal-close">我已保存，关闭</button></div>`);
+      break;
+    }
+    case "copy-pw": {
+      try { navigator.clipboard.writeText(el.dataset.pw); toast("已复制到剪贴板"); } catch (e2) { toast("复制失败，请手动选择文本", "err"); }
+      break;
+    }
+    case "admin-del-post": {
+      const yes = await confirmBox("删除这条帖子？", "删除后学生端立即不可见（其下所有回复一并隐藏），可在「已删除」中恢复。", "删除", true);
+      if (!yes) return;
+      const r = await api(`/api/admin/posts/${id}`, "DELETE");
+      if (r.ok) { toast("已删除"); renderAdmin(); } else toast(r.msg, "err");
+      break;
+    }
+    case "admin-restore-post": {
+      const r = await api(`/api/admin/posts/${id}/restore`, "POST");
+      if (r.ok) { toast("已恢复"); renderAdmin(); } else toast(r.msg, "err");
+      break;
+    }
+    case "report-resolve": {
+      const action = v;
+      const rid = el.dataset.rid;
+      const yes = await confirmBox(action === "delete" ? "删除被举报的帖子？" : "驳回这条举报？",
+        action === "delete" ? "帖子将连同其回复一起对学生端隐藏。" : "帖子保持可见，举报标记为已驳回。", action === "delete" ? "删除帖子" : "驳回", action === "delete");
+      if (!yes) return;
+      const r = await api(`/api/admin/reports/${rid}/resolve`, "POST", { action });
+      if (r.ok) { toast(action === "delete" ? "帖子已删除" : "举报已驳回"); renderAdmin(); } else toast(r.msg, "err");
+      break;
+    }
+    case "admin-changepw": adminChangePwModal(); break;
+    case "admin-save-pw": {
+      const o = $("#pwOld").value, n1 = $("#pwNew").value, n2 = $("#pwNew2").value;
+      if (n1 !== n2) { toast("两次输入的新密码不一致", "err"); return; }
+      const r = await api("/api/admin/change-password", "POST", { old: o, new: n1 });
+      if (!r.ok) { toast(r.msg, "err"); return; }
+      closeModal(); toast("密码已修改，下次登录生效");
+      break;
+    }
+    /* ---- 商家 ---- */
+    case "dish-add": dishFormModal(null); break;
+    case "dish-edit": {
+      const r = await api("/api/merchant/overview");
+      const dish = r.ok && r.data.dishes.find(x => x.id === +id);
+      if (dish) dishFormModal(dish);
+      break;
+    }
+    case "dish-save": {
+      const name = $("#dName").value.trim(), price = $("#dPrice").value, intro = $("#dIntro").value.trim();
+      if (!id) {
+        const r = await api("/api/merchant/dishes", "POST", { name, price, intro });
+        if (!r.ok) { toast(r.msg, "err"); return; }
+        toast("菜品已上架");
+      } else {
+        const body = { name, price, intro, status: $("#dStatus") ? +$("#dStatus").value : undefined };
+        const r = await api(`/api/merchant/dishes/${id}`, "PUT", body);
+        if (!r.ok) { toast(r.msg, "err"); return; }
+        toast("菜品已更新");
+      }
+      closeModal(); renderMerchant();
+      break;
+    }
+    case "dish-status": {
+      const r = await api(`/api/merchant/dishes/${id}`, "PUT", { status: +v });
+      if (r.ok) { toast(v === "1" ? "已上架" : "已下架"); renderMerchant(); } else toast(r.msg, "err");
+      break;
+    }
+  }
+});
+
+/* ------------------------------------------------------------ 启动 */
+window.App = { _cf: () => {} };
+(async function init() {
+  $("#brandLogo").innerHTML = icon("utensils");
+  await refreshBoot();
+  window.addEventListener("hashchange", route);
+  route();
+})();
