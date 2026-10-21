@@ -7,6 +7,9 @@ venv/
 # 密钥（每台机器自己生成，不入库）
 secret.key
 
+# 数据库（数据随时在变，入库会让仓库爆炸；靠 backups/ 快照 + database.py 自动建库）
+canteen.db
+
 # 本地备份快照
 backups/
 
