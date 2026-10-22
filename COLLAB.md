@@ -91,3 +91,65 @@ VS Code 装 **Live Share** 扩展 → 点 Share → 把链接发给对方。对�
 python tool.py save "发布前快照"
 ```
 线上数据在沙箱里，跟本地 `canteen.db` 是两份，互不影响。
+
+## 八、团队协作：fork 还是加协作者？
+
+仓库是公开的（`https://github.com/wufaaa/canteen-rating-wall`），所以让队友参与有两种方式，按需要选一种即可。
+
+### 方式 A：队友自己 fork（零配置，谁都能来）
+
+队友不需要你给任何权限，自己复制一份就行：
+
+1. 打开仓库页，点右上角 **Fork**，复制一份到自己账号下。
+2. 把自己那份 clone 下来：
+   ```bash
+   git clone https://github.com/队友用户名/canteen-rating-wall.git
+   cd canteen-rating-wall
+   ```
+3. 加一个指向上游（你的仓库）的远程，方便以后同步你的最新改动：
+   ```bash
+   git remote add upstream https://github.com/wufaaa/canteen-rating-wall.git
+   ```
+4. 开分支、改、推到自己 fork：
+   ```bash
+   git checkout -b 我的改动
+   # 改代码
+   git add -A && git commit -m "改了啥"
+   git push origin 我的改动
+   ```
+5. 回到自己 fork 的页面，点 **Compare & pull request**，把分支提 PR 到 `wufaaa/canteen-rating-wall` 的 `main`。
+6. 以后同步你的最新改动：
+   ```bash
+   git fetch upstream
+   git merge upstream/main
+   ```
+
+**特点**：不用加任何人；但每个人维护自己那份，同步上游多一步，新手容易忘。
+
+### 方式 B：加成协作者（固定小团队推荐）
+
+你在 仓库 → **Settings → Collaborators → Add people**，输入队友 GitHub 用户名，权限选 **Write**，点 Add。对方在邮箱 / 通知里点接受后，就能直接在你这一个仓库里干活：
+
+```bash
+git clone https://github.com/wufaaa/canteen-rating-wall.git
+cd canteen-rating-wall
+git checkout -b 我的改动
+# 改
+git add -A && git commit -m "改了啥"
+git push origin 我的改动      # 直接推到同一个仓库
+```
+
+然后在仓库页面点 **Compare & pull request** 提 PR。
+
+**特点**：大家共用一份仓库，同步最省心；代价是你要手动加人、管权限。
+
+### 让 main 必须走 PR（提交申请）
+
+不想让人直接往 main 推，就在 仓库 → **Settings → Branches → Add branch protection rule**：
+
+- Branch name pattern 填 `main`
+- 勾 **Require a pull request before merging**
+- （可选）勾 **Require approvals** 设 1，强制至少一人 review 才能合
+- 点 Create / Save
+
+设置后，除管理员外任何人都不能直接推 main，必须先提 PR。

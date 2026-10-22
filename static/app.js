@@ -68,6 +68,7 @@ const ICONS = {
   crown: '<path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7Z"/><path d="M5 20h14"/>',
   award: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
 };
 function icon(name, cls) { return `<svg class="ic ${cls || ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`; }
 
@@ -164,6 +165,7 @@ const S = {
   hoverScore: 0,
   countdownTimer: null,
   postPhotoFile: null,
+  searchQ: "",
 };
 
 /* ------------------------------------------------------------ 顶栏 */
@@ -408,9 +410,79 @@ async function renderCanteens() {
   $("#view").innerHTML = `
     <div class="page-head"><div><h1>${icon("grid")} 食堂窗口</h1>
       <div class="sub">3 个食堂 · 每个食堂 2 层 · 每层 10 个窗口 · 今日剩余 ${d.quota_left} 次打分机会</div></div></div>
-    <div class="canteen-tabs">${canteenTabs}</div>
-    <div class="floor-tabs">${floorTabs}</div>
-    <div class="win-grid">${cards}</div>`;
+    <div class="search-bar">
+      <span class="sb-ico">${icon("search")}</span>
+      <input id="winSearch" type="search" placeholder="搜窗口名、菜品，如「清真」「麻辣香锅」「12」" value="${esc(S.searchQ || "")}" autocomplete="off" spellcheck="false">
+      <button class="sb-clear" data-act="search-clear" title="清空" ${S.searchQ ? "" : "hidden"}>${icon("x")}</button>
+    </div>
+    <div id="browseArea">
+      <div class="canteen-tabs">${canteenTabs}</div>
+      <div class="floor-tabs">${floorTabs}</div>
+      <div class="win-grid">${cards}</div>
+    </div>
+    <div id="searchArea" class="hidden"></div>`;
+  wireSearch();
+  if (S.searchQ) doSearch(S.searchQ, true);
+}
+
+/* 关键词搜索：输入防抖 + 结果渲染 */
+function wireSearch() {
+  const input = $("#winSearch");
+  if (!input) return;
+  let timer = null;
+  const clearBtn = $(".sb-clear");
+  input.addEventListener("input", () => {
+    const v = input.value.trim();
+    S.searchQ = v;
+    if (clearBtn) clearBtn.hidden = !v;
+    clearTimeout(timer);
+    timer = setTimeout(() => doSearch(v), 220);
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") { clearTimeout(timer); doSearch(input.value.trim(), true); }
+    else if (e.key === "Escape") { input.value = ""; S.searchQ = ""; if (clearBtn) clearBtn.hidden = true; doSearch(""); }
+  });
+}
+
+async function doSearch(q, immediate) {
+  const browse = $("#browseArea"), area = $("#searchArea");
+  if (!browse || !area) return;
+  if (!q) { browse.classList.remove("hidden"); area.classList.add("hidden"); area.innerHTML = ""; return; }
+  browse.classList.add("hidden");
+  area.classList.remove("hidden");
+  if (!immediate) area.innerHTML = `<div class="search-loading">${icon("search")} 搜索中…</div>`;
+  const r = await api("/api/search?q=" + encodeURIComponent(q));
+  if (!r.ok) { area.innerHTML = `<div class="empty">${icon("alert")} ${esc(r.msg)}</div>`; return; }
+  const d = r.data;
+  if (!d.windows.length) {
+    area.innerHTML = `<div class="empty">${icon("search")} 没找到和「${esc(q)}」相关的窗口，换个关键词试试</div>`;
+    return;
+  }
+  const todayRated = new Set((S.boot && S.boot.today_rated) || []);
+  const list = d.windows.map(w => {
+    const rated = todayRated.has(w.id);
+    const dishes = (w.matched_dishes || []).map(dh =>
+      `<span class="hit-dish">${icon("utensils")} ${esc(dh.name)}<b>¥${dh.price}</b></span>`).join("");
+    return `<div class="search-hit ${w.status !== 1 ? "closed" : ""}" ${w.status === 1 ? `data-act="go-window" data-id="${w.id}"` : ""}>
+      <div class="sh-main">
+        <div class="sh-top">
+          <span class="sh-loc">${loc(w)}</span>
+          ${w.rank ? `<span class="rank-badge ${w.rank === 1 ? "top1" : ""}">月榜 #${w.rank}</span>` : ""}
+          ${w.status !== 1 ? '<span class="tag off">停业</span>' : ""}
+        </div>
+        <div class="sh-name">${esc(w.name)}</div>
+        <div class="sh-mer">商家：${esc(w.merchant_name)}</div>
+        ${dishes ? `<div class="sh-dishes">${dishes}</div>` : ""}
+      </div>
+      <div class="sh-side">
+        <div class="sh-score">${w.avg_score != null ? w.avg_score.toFixed(1) : "—"}</div>
+        <div class="sh-score-l">${stars(w.avg_score)} 本月 ${w.month_cnt} 人评</div>
+        <div class="sh-go">${rated ? "今日已打分" : "查看 / 打分"} ${icon("chevronRight")}</div>
+      </div>
+    </div>`;
+  }).join("");
+  area.innerHTML = `<div class="search-meta">找到 <b>${d.total}</b> 个相关窗口${d.total > d.windows.length ? `（显示前 ${d.windows.length} 个）` : ""}</div>
+    <div class="search-list">${list}</div>`;
 }
 
 /* ------------------------------------------------------------ 窗口详情页 */
@@ -851,6 +923,14 @@ document.addEventListener("click", async e => {
     case "go-canteens": location.hash = "#/canteens"; break;
     case "sel-canteen": S.winSel.canteen = +v; renderCanteens(); break;
     case "sel-floor": S.winSel.floor = +v; renderCanteens(); break;
+    case "search-clear": {
+      const input = $("#winSearch");
+      if (input) input.value = "";
+      S.searchQ = "";
+      const c = $(".sb-clear"); if (c) c.hidden = true;
+      doSearch("");
+      break;
+    }
     case "anon-reset": {
       const yes = await confirmBox("更换匿名身份？", "你将以一个<b>全新的随机代号</b>继续使用。旧代号下的评分和发帖记录仍会保留（无法与新身份关联），但「我的」页面将看不到它们。", "换新身份", false);
       if (!yes) return;

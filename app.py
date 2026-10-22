@@ -389,6 +389,71 @@ def api_canteens():
                "this_month": month, "today": today_str()})
 
 
+@app.route("/api/search")
+def api_search():
+    """关键词搜索窗口：匹配窗口名 / 商家名 / 菜品名 / 菜品简介，纯数字时再按窗口编号匹配"""
+    q = (request.args.get("q") or "").strip()[:40]
+    if not q:
+        return ok({"q": "", "windows": [], "total": 0})
+    # 转义 LIKE 通配符，避免用户输入的 % _ 被当成模式
+    safe = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like = "%" + safe + "%"
+    month = this_month()
+
+    with get_db() as c:
+        hit_ids = [r["id"] for r in c.execute(
+            "SELECT DISTINCT w.id FROM windows w "
+            "LEFT JOIN dishes d ON d.window_id = w.id AND d.status = 1 "
+            "WHERE w.name LIKE ? ESCAPE '\\' "
+            "   OR w.merchant_name LIKE ? ESCAPE '\\' "
+            "   OR d.name LIKE ? ESCAPE '\\' "
+            "   OR d.intro LIKE ? ESCAPE '\\' "
+            "ORDER BY w.id",
+            (like, like, like, like))]
+        # 纯数字：额外按窗口编号匹配（比如直接搜「12」）
+        if q.isdigit():
+            for r in c.execute("SELECT id FROM windows WHERE win_no = ?", (int(q),)):
+                if r["id"] not in hit_ids:
+                    hit_ids.append(r["id"])
+        if not hit_ids:
+            return ok({"q": q, "windows": [], "total": 0})
+
+        ph = ",".join("?" * len(hit_ids))
+        wins = c.execute("SELECT * FROM windows WHERE id IN (%s)" % ph, hit_ids).fetchall()
+        avg_map = {r["window_id"]: r for r in month_scores(c, month)}
+        rank_map = window_rank_map(c, month)
+        dish_cnt = {r["window_id"]: r["cnt"] for r in c.execute(
+            "SELECT window_id, COUNT(*) AS cnt FROM dishes WHERE status = 1 "
+            "AND window_id IN (%s) GROUP BY window_id" % ph, hit_ids)}
+        matched = {}
+        for r in c.execute(
+                "SELECT window_id, name, price FROM dishes "
+                "WHERE status = 1 AND window_id IN (%s) "
+                "  AND (name LIKE ? ESCAPE '\\' OR intro LIKE ? ESCAPE '\\') "
+                "ORDER BY window_id, id" % ph, hit_ids + [like, like]):
+            matched.setdefault(r["window_id"], []).append(
+                {"name": r["name"], "price": r["price"]})
+
+    ql = q.lower()
+    result = []
+    for w in wins:
+        avg = avg_map.get(w["id"])
+        result.append({
+            **_window_brief(w),
+            "avg_score": avg["avg_score"] if avg else None,
+            "month_cnt": avg["cnt"] if avg else 0,
+            "rank": rank_map.get(w["id"]),
+            "dish_cnt": dish_cnt.get(w["id"], 0),
+            "matched_dishes": matched.get(w["id"], [])[:4],
+            "name_hit": ql in (w["name"] or "").lower(),
+        })
+    # 窗口名命中的排前面，其次按本月均分（无评分排后），最后按窗口号
+    result.sort(key=lambda x: (0 if x["name_hit"] else 1,
+                               -(x["avg_score"] if x["avg_score"] is not None else -1),
+                               x["id"]))
+    return ok({"q": q, "windows": result[:60], "total": len(result)})
+
+
 @app.route("/api/windows/<int:wid>")
 def api_window(wid):
     aid = current_anon_id()
