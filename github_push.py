@@ -2,7 +2,7 @@
 """把项目推到 GitHub（首次配置 + 后续同步）
 
 用法：
-    python github_push.py https://github.com/你的用户名/canteen-rating.git
+    python github_push.py https://github.com/你的用户名/canteen-rating-wall.git
 """
 import os
 import subprocess
@@ -23,7 +23,7 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         print("仓库地址在 GitHub 建仓后页面上能复制，形如：")
-        print("  https://github.com/你的用户名/canteen-rating.git")
+        print("  https://github.com/你的用户名/canteen-rating-wall.git")
         return
 
     url = sys.argv[1].strip()

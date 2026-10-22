@@ -35,7 +35,7 @@ python tool.py dbrestore db-v20261022-071957.db
 
 ## 三、推到 GitHub（一次配置，之后随时同步）
 
-1. 打开 github.com → New repository → 名字填 `canteen-rating` → 选 **Private** → 不要勾选任何初始化文件 → Create
+1. 打开 github.com → New repository → 名字填 `canteen-rating-wall` → 选 **Public**（开源）→ 不要勾选任何初始化文件 → Create
 2. 复制页面上的仓库地址，执行：
 ```bash
 python github_push.py https://github.com/你的用户名/canteen-rating.git

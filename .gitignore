@@ -9,6 +9,12 @@ secret.key
 
 # 数据库（数据随时在变，入库会让仓库爆炸；靠 backups/ 快照 + database.py 自动建库）
 canteen.db
+*.db-wal
+*.db-shm
+
+# 临时备份文件
+*.bak
+canteen.db.bak
 
 # 本地备份快照
 backups/

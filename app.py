@@ -976,6 +976,9 @@ def run():
     database.init_db()
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "5001"))
+    if not os.environ.get("ADMIN_PASSWORD"):
+        print("⚠  安全提醒：当前管理员使用默认口令 admin@2026。公网部署前请通过环境变量 "
+              "ADMIN_PASSWORD 修改为强口令，或登录后台在「修改密码」里改掉。")
     print("食堂匿名打分系统启动: http://%s:%d" % (host, port))
     app.run(host=host, port=port, debug=False)
 

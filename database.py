@@ -363,9 +363,10 @@ def init_db(force=False):
     now = now_str()
     today = datetime.now().date()
 
-    # 管理员
+    # 管理员（口令可用环境变量 ADMIN_PASSWORD 覆盖；未设置时使用默认开发口令）
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "admin@2026")
     cur.execute("INSERT INTO admins(username, password_hash, created_at) VALUES (?,?,?)",
-                ("admin", generate_password_hash("admin@2026"), now))
+                ("admin", generate_password_hash(admin_pw), now))
 
     # 窗口 + 商家账号（初始密码统一 shop123456，登录后管理员可重置）
     win_cur_rows = []
