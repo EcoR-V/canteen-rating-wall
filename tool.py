@@ -13,6 +13,7 @@
 import glob
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -21,6 +22,18 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE, "canteen.db")
 BK = os.path.join(BASE, "backups", "db")
 KEEP = 40
+
+
+def copy_db(src, dest):
+    """用 SQLite 在线备份接口复制，WAL 模式下也不会漏数据"""
+    s = sqlite3.connect(src, timeout=20)
+    d = sqlite3.connect(dest)
+    try:
+        with d:
+            s.backup(d)
+    finally:
+        d.close()
+        s.close()
 
 
 def git(args, check=False):
@@ -55,7 +68,7 @@ def save(note):
     os.makedirs(BK, exist_ok=True)
     if os.path.exists(DB):
         dest = os.path.join(BK, "db-%s.db" % tag)
-        shutil.copy2(DB, dest)
+        copy_db(DB, dest)
         print("数据库已备份：backups/db/db-%s.db" % tag)
     files = sorted(glob.glob(os.path.join(BK, "db-*.db")))
     for old in files[:-KEEP]:
@@ -110,8 +123,8 @@ def db_restore(name):
         return
     os.makedirs(BK, exist_ok=True)
     if os.path.exists(DB):
-        shutil.copy2(DB, os.path.join(BK, "db-before-restore-%s.db" % time.strftime("%Y%m%d-%H%M%S")))
-    shutil.copy2(path, DB)
+        copy_db(DB, os.path.join(BK, "db-before-restore-%s.db" % time.strftime("%Y%m%d-%H%M%S")))
+    copy_db(path, DB)
     print("数据库已恢复自：%s" % os.path.basename(path))
     print("恢复前的数据库也另存了一份，在 backups/db/ 里。")
 

@@ -69,7 +69,7 @@ const ICONS = {
   award: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
 };
-function icon(name, cls) { return `<svg class="${cls || ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`; }
+function icon(name, cls) { return `<svg class="ic ${cls || ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`; }
 
 function stars(score, cls) {
   let h = `<span class="stars ${cls || ""}">`;
@@ -194,8 +194,8 @@ function renderTopbar() {
     idz = `<span class="pill gray">${icon("timer")} 今日打分 ${total - left}/${total}</span>
       <span class="pill" title="你的匿名代号，任何人都无法查到你的真实信息">${icon("shield")} ${esc(b.nickname)}</span>
       <button class="btn btn-ghost btn-sm" data-act="anon-reset" title="换一个新的匿名身份">${icon("refresh")} 换身份</button>
-      <a class="btn btn-ghost btn-sm" href="#/merchant">${icon("store")} 商家</a>
-      <a class="btn btn-ghost btn-sm" href="#/admin">${icon("shield")} 管理员</a>`;
+      <a class="btn btn-ghost btn-sm only-pc" href="#/merchant">${icon("store")} 商家</a>
+      <a class="btn btn-ghost btn-sm only-pc" href="#/admin">${icon("shield")} 管理员</a>`;
   } else if (role === "admin") {
     idz = `<span class="pill">${icon("shield")} 管理员 ${esc(b.admin_name || "")}</span>
       <button class="btn btn-ghost btn-sm" data-act="admin-changepw">${icon("key")} 改密码</button>
@@ -205,6 +205,36 @@ function renderTopbar() {
       <button class="btn btn-ghost btn-sm" data-act="logout">${icon("logout")} 退出</button>`;
   }
   $("#identity").innerHTML = idz;
+  renderTabbar(role, route);
+}
+
+/** 手机端底部导航（PC 端隐藏） */
+function renderTabbar(role, route) {
+  const el = $("#tabbar");
+  if (!el) return;
+  let items = [];
+  if (role === "admin") {
+    items = [
+      { href: "#/admin", key: "admin", ic: "chart", text: "看板" },
+      { href: "#/leaderboard", key: "leaderboard", ic: "trophy", text: "榜单" },
+      { href: "#/canteens", key: "canteens", ic: "grid", text: "食堂" },
+    ];
+  } else if (role === "merchant") {
+    items = [
+      { href: "#/merchant", key: "merchant", ic: "store", text: "商家" },
+      { href: "#/leaderboard", key: "leaderboard", ic: "trophy", text: "榜单" },
+      { href: "#/canteens", key: "canteens", ic: "grid", text: "食堂" },
+    ];
+  } else {
+    items = [
+      { href: "#/leaderboard", key: "leaderboard", ic: "trophy", text: "榜单" },
+      { href: "#/canteens", key: "canteens", ic: "grid", text: "食堂" },
+      { href: "#/my", key: "my", ic: "user", text: "我的" },
+    ];
+  }
+  el.innerHTML = items.map(it =>
+    `<a href="${it.href}" class="tab-item ${route === it.key ? "on" : ""}">
+       ${icon(it.ic)}<span>${it.text}</span></a>`).join("");
 }
 
 async function refreshBoot() {
@@ -314,7 +344,7 @@ async function renderLeaderboard() {
 
     ${posterHtml}
 
-    <div class="card" style="padding:8px 10px;margin-top:14px">
+    <div class="card rank-2col" style="padding:8px 10px;margin-top:14px">
       ${rest.map(w => `
         <div class="rank-row ${w.status !== 1 ? "closed" : ""}" ${w.status === 1 ? `data-act="go-window" data-id="${w.window_id}"` : ""}>
           <div class="rank-no ${w.rank <= 3 ? "r" + w.rank : ""}">${w.rank}</div>
@@ -369,7 +399,8 @@ async function renderCanteens() {
       <div class="wmer">商家：${esc(w.merchant_name)} ${w.status !== 1 ? '<span class="tag off">停业</span>' : ""}</div>
       <div class="wscore">${stars(w.avg_score)} <b>${w.avg_score != null ? w.avg_score.toFixed(1) : "—"}</b>
         <span>（${w.month_cnt} 人评）</span></div>
-      <div class="wmeta"><span>${icon("utensils")} ${w.dish_cnt} 道菜</span><span>${icon("timer")} 剩 ${d.quota_left} 次打分</span></div>
+      <div class="wmeta"><span>${icon("utensils")} ${w.dish_cnt} 道菜</span>
+        <span>${icon("users")} ${w.month_cnt} 人评</span></div>
       ${rated ? '<span class="rated-mark">✓ 今日已打分</span>' : ""}
     </div>`;
   }).join("");
@@ -546,7 +577,18 @@ async function renderMy() {
     <div class="sec-title">${icon("star")} 我的评分历史</div>
     <div class="card" style="padding:8px 10px">${ratings || '<div class="empty">还没有打过分，去食堂页逛逛吧</div>'}</div>
     <div class="sec-title">${icon("message")} 我的发帖记录</div>
-    <div class="card" style="padding:8px 10px">${posts || '<div class="empty">还没有发过帖</div>'}</div>`;
+    <div class="card" style="padding:8px 10px">${posts || '<div class="empty">还没有发过帖</div>'}</div>
+    <div class="sec-title">${icon("key")} 身份入口</div>
+    <div class="card" style="padding:14px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn btn-ghost" href="#/merchant">${icon("store")} 商家登录</a>
+        <a class="btn btn-ghost" href="#/admin">${icon("shield")} 管理员登录</a>
+      </div>
+      <div style="font-size:11.5px;color:var(--faint);margin-top:9px;line-height:1.7">
+        商家账号形如 <b>c1-1-01</b>（食堂-楼层-窗口），初始密码 shop123456，登录后可改。<br>
+        管理员账号由学校统一分配。
+      </div>
+    </div>`;
 }
 
 /* ------------------------------------------------------------ 登录页 */

@@ -5,9 +5,11 @@ import random
 import secrets
 import sqlite3
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import generate_password_hash
+
+CN_TZ = timezone(timedelta(hours=8))
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "canteen.db")
 random.seed(20261021)  # 固定随机种子，保证示例数据可复现
@@ -200,14 +202,15 @@ def gen_nickname():
 
 
 def now_str(offset_seconds=0):
-    t = datetime.now() + timedelta(seconds=offset_seconds)
+    t = datetime.now(CN_TZ) + timedelta(seconds=offset_seconds)
     return t.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=20)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     return conn
 
 

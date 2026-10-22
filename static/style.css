@@ -25,6 +25,9 @@ button { font-family: inherit; font-size: 13px; cursor: pointer; border: none; b
 input, select, textarea { font-family: inherit; font-size: 14px; color: var(--text); }
 ::selection { background: var(--blue-100); }
 
+/* 图标兜底尺寸：没有单独指定尺寸的内联 SVG 一律 16px，避免默认 300×150 撑爆布局 */
+svg.ic { width: 16px; height: 16px; flex-shrink: 0; }
+
 /* ------------------------------------------------------------ 顶栏 */
 .topbar {
   position: sticky; top: 0; z-index: 50;
@@ -41,11 +44,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--te
 .brand-logo svg { width: 19px; height: 19px; }
 .brand-text { font-size: 16px; font-weight: 700; letter-spacing: .5px; display: flex; flex-direction: column; line-height: 1.1; }
 .brand-text small { font-size: 10.5px; font-weight: 400; color: var(--faint); letter-spacing: 1px; margin-top: 2px; }
-.nav { display: flex; gap: 4px; flex: 1; }
+.nav { display: flex; gap: 4px; flex: 1; min-width: 0; }
 .nav a {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   padding: 7px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 500;
   color: var(--muted); transition: all .15s;
 }
+.nav a svg { width: 15px; height: 15px; flex-shrink: 0; }
 .nav a:hover { color: var(--blue-600); background: var(--blue-50); }
 .nav a.active { color: #fff; background: var(--blue-600); box-shadow: 0 2px 8px rgba(37, 99, 235, .3); }
 .identity { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -205,7 +210,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--te
 .dish-body { padding: 11px 12px 12px; }
 .dish-name { font-weight: 700; font-size: 13.5px; display: flex; justify-content: space-between; gap: 8px; }
 .dish-price { color: #d97706; font-weight: 800; white-space: nowrap; }
-.dish-intro { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+.dish-intro { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .dish-updated { font-size: 10.5px; color: var(--faint); margin-top: 7px; }
 
 /* ------------------------------------------------------------ 帖子 */
@@ -345,7 +351,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.8px; }
   .win-stats { width: 100%; justify-content: space-between; gap: 10px; margin-top: 8px; }
   .ws-item .v { font-size: 17px; }
   .dish-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .dish-photo { height: 100px; }
+  .dish-photo { height: 118px; }
   .dish-intro { font-size: 11.5px; }
 }
 
@@ -504,4 +510,48 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 12.8px; }
   .poster-window { font-size: 22px; }
   .poster-score-big { font-size: 34px; }
   .poster-hero { min-height: 200px; }
+}
+
+/* ============================================================ 手机端 / PC 端双套布局 */
+.tabbar { display: none; }
+
+/* 手机：底部导航，顶部导航收起 */
+@media (max-width: 900px) {
+  .tabbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: rgba(255, 255, 255, .95);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--line);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 16px rgba(23, 34, 59, .06);
+  }
+  .tab-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 0 4px; font-size: 10.5px; color: var(--muted);
+    border-radius: 10px; transition: color .15s;
+  }
+  .tab-item svg { width: 21px; height: 21px; }
+  .tab-item.on { color: var(--blue-600); font-weight: 700; }
+  .tab-item.on svg { stroke-width: 2.4; }
+  .tab-item:active { background: var(--blue-50); }
+  #mainNav { display: none; }
+  .view { padding-bottom: 88px; }
+  .topbar-inner { padding: 8px 13px; gap: 8px; }
+  .brand-logo { width: 30px; height: 30px; }
+  .brand-logo svg { width: 17px; height: 17px; }
+  .brand-text { font-size: 14.5px; }
+  #identity { gap: 6px; margin-left: auto; }
+  #identity .pill {
+    font-size: 11.5px; padding: 3px 9px; max-width: 44vw;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #identity .only-pc { display: none; }
+  #identity .btn { padding: 5px 9px; font-size: 12px; }
+}
+
+/* PC：榜单两列（按列优先，先读完左边一列再看右边） */
+@media (min-width: 1000px) {
+  .card.rank-2col { columns: 2; column-gap: 16px; }
+  .card.rank-2col .rank-row { break-inside: avoid; page-break-inside: avoid; }
+  .view { padding-top: 24px; }
 }

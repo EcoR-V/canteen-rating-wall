@@ -15,8 +15,10 @@ import secrets
 import sqlite3
 import string
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
+
+CN_TZ = timezone(timedelta(hours=8))
 
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -79,16 +81,21 @@ def get_db():
         conn.close()
 
 
+def _now_cn():
+    """统一按东八区取时间：服务器在 UTC 时，日期边界不能跟着漂"""
+    return datetime.now(CN_TZ)
+
+
 def now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return _now_cn().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def today_str():
-    return date.today().isoformat()
+    return _now_cn().date().isoformat()
 
 
 def this_month():
-    return datetime.now().strftime("%Y-%m")
+    return _now_cn().strftime("%Y-%m")
 
 
 def ok(data=None):
@@ -148,6 +155,19 @@ def require_merchant(fn):
     return wrapper
 
 
+def require_anon(fn):
+    """学生侧写操作：商家/管理员账号不能参与打分、发帖、点赞、举报"""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        role = session.get("role")
+        if role == "merchant":
+            return err("当前是商家账号，不能以学生身份评分或发言", 403)
+        if role == "admin":
+            return err("当前是管理员账号，不能以学生身份评分或发言", 403)
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 def admin_log(conn, action, detail):
     conn.execute("INSERT INTO admin_logs(admin_user, action, detail, created_at) VALUES (?,?,?,?)",
                  (session.get("uid") and _admin_name(conn) or "admin", action, detail, now()))
@@ -180,7 +200,8 @@ def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
     # 以静态资源 mtime 作为版本号，发布新版后所有学生浏览器自动拉取最新前端
-    v = int(os.path.getmtime(os.path.join(STATIC_DIR, "app.js")))
+    v = max(int(os.path.getmtime(os.path.join(STATIC_DIR, f)))
+            for f in ("app.js", "style.css"))
     html = html.replace("style.css", "style.css?v=%d" % v).replace("app.js", "app.js?v=%d" % v)
     return html
 
@@ -453,6 +474,7 @@ def api_window_posts(wid):
 
 # ---------------------------------------------------------------- 学生：打分 / 发帖 / 点赞 / 举报
 @app.route("/api/rate", methods=["POST"])
+@require_anon
 def api_rate():
     data = request.get_json(force=True, silent=True) or {}
     aid = current_anon_id()
@@ -488,6 +510,7 @@ def api_rate():
 
 
 @app.route("/api/posts", methods=["POST"])
+@require_anon
 def api_create_post():
     data = request.get_json(force=True, silent=True) or {}
     content = (data.get("content") or "").strip()
@@ -524,6 +547,7 @@ def api_create_post():
 
 
 @app.route("/api/posts/<int:pid>/photo", methods=["POST"])
+@require_anon
 def api_post_upload_photo(pid):
     """学生给自己刚发的留言补一张照片（匿名身份校验，不能传别人的帖）"""
     aid = current_anon_id()
@@ -545,6 +569,7 @@ def api_post_upload_photo(pid):
 
 
 @app.route("/api/posts/<int:pid>/reply", methods=["POST"])
+@require_anon
 def api_reply(pid):
     data = request.get_json(force=True, silent=True) or {}
     content = (data.get("content") or "").strip()
@@ -566,6 +591,7 @@ def api_reply(pid):
 
 
 @app.route("/api/posts/<int:pid>/like", methods=["POST"])
+@require_anon
 def api_like(pid):
     aid = current_anon_id()
     with get_db() as c:
@@ -585,6 +611,7 @@ def api_like(pid):
 
 
 @app.route("/api/posts/<int:pid>/report", methods=["POST"])
+@require_anon
 def api_report(pid):
     data = request.get_json(force=True, silent=True) or {}
     reason = (data.get("reason") or "").strip()
