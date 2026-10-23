@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS posts (
     anon_id INTEGER NOT NULL,
     content TEXT NOT NULL,
     photo TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     status INTEGER NOT NULL DEFAULT 1
 );
@@ -346,6 +347,8 @@ def _migrate():
         cols = [r[1] for r in conn.execute("PRAGMA table_info(posts)")]
         if "photo" not in cols:
             conn.execute("ALTER TABLE posts ADD COLUMN photo TEXT NOT NULL DEFAULT ''")
+        if "category" not in cols:
+            conn.execute("ALTER TABLE posts ADD COLUMN category TEXT NOT NULL DEFAULT ''")
         conn.commit()
     finally:
         conn.close()
